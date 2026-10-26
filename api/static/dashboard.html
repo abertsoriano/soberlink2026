@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>SoberLink — Venue Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e37; --text: #e8e9ec; --muted: #9aa0ab;
+    --low: #3ba55d; --moderate: #d4a72c; --high: #e0722f; --veryhigh: #d9403f;
+    --refusal: #d32f2f;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 2rem; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 1.5rem; }
+  .row { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  input { flex: 1; padding: 0.6rem 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); font-size: 0.95rem; }
+  button { padding: 0.6rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font-size: 0.9rem; }
+  button:hover { background: #23262e; }
+  button.primary { background: #3a6ee0; border-color: #3a6ee0; }
+  button.btn-refusal { background: var(--refusal); border-color: var(--refusal); color: #fff; font-weight: 600; }
+  button.btn-refusal:hover { background: #b71c1c; border-color: #b71c1c; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+  .card.refused { border: 2px solid var(--refusal); box-shadow: 0 0 0 3px rgba(211,47,47,0.25); }
+  .refusal-banner { background: var(--refusal); color: #fff; font-weight: 700; letter-spacing: 0.03em; padding: 0.7rem 1rem; border-radius: 8px; margin-bottom: 1rem; display: none; }
+  .session-id { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .risk-badge { display: inline-block; padding: 0.3rem 0.9rem; border-radius: 999px; font-weight: 600; font-size: 0.9rem; color: #0f1115; }
+  .risk-LOW { background: var(--low); }
+  .risk-MODERATE { background: var(--moderate); }
+  .risk-HIGH { background: var(--high); }
+  .risk-VERY.HIGH, .risk-VERY-HIGH { background: var(--veryhigh); }
+  .score { font-size: 2.4rem; font-weight: 700; margin: 0.4rem 0; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 1rem 0; font-size: 0.9rem; }
+  .stat-label { color: var(--muted); }
+  .factors { font-size: 0.9rem; line-height: 1.7; }
+  .factor-pos { color: var(--high); }
+  .factor-zero { color: var(--muted); }
+  .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
+  .disclaimer { background: #23262e; border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; font-size: 0.85rem; color: var(--muted); margin-top: 1rem; }
+  .flag-yes { color: var(--refusal); font-weight: 700; }
+  .flag-no { color: var(--muted); }
+  #status { color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SoberLink — Venue Dashboard</h1>
+
+  <div class="row">
+    <input id="tokenInput" placeholder="Paste session token or scanned URL" />
+    <button class="primary" onclick="loadSession()">Load / Scan</button>
+  </div>
+  <div class="row">
+    <label style="color:var(--muted);font-size:0.85rem;align-self:center;">This venue:</label>
+    <select id="venueSelect" style="flex:1;padding:0.5rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);">
+      <option value="VEN-001">VEN-001 — Test Bar</option>
+      <option value="VEN-002">VEN-002 — Second Bar</option>
+      <option value="VEN-003">VEN-003 — Third Bar</option>
+    </select>
+  </div>
+  <div id="status"></div>
+
+  <div id="sessionCard" style="display:none">
+    <div class="card" id="mainCard">
+      <div class="refusal-banner" id="refusalBanner">⚠ SERVICE PREVIOUSLY REFUSED TO THIS PERSON — check with staff before serving</div>
+      <div class="session-id" id="sessionIdLabel"></div>
+      <span class="risk-badge" id="riskBadge"></span>
+      <div class="score" id="scoreValue"></div>
+
+      <div class="stats">
+        <div><span class="stat-label">Recent (3h):</span> <span id="drinks3h"></span> standard drinks</div>
+        <div><span class="stat-label">Venues visited:</span> <span id="venues"></span></div>
+        <div><span class="stat-label">Previous refusal:</span> <span id="refusalFlag"></span></div>
+        <div><span class="stat-label">Staff concern:</span> <span id="concernFlag"></span></div>
+      </div>
+
+      <div class="factors" id="factorsList"></div>
+
+      <div style="margin-top:1rem;">
+        <label style="color:var(--muted);font-size:0.85rem;">Record a drink:</label>
+        <div class="row" style="margin-top:0.4rem;margin-bottom:0;">
+          <select id="drinkSelect" style="flex:1;padding:0.5rem;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);">
+            <option value="beer_285ml|285|4.8">285mL full-strength beer (~1.0 std)</option>
+            <option value="beer_375ml|375|4.8" selected>375mL full-strength beer (~1.4 std)</option>
+            <option value="beer_425ml|425|4.8">425mL full-strength beer (~1.6 std)</option>
+            <option value="wine_100ml|100|13">100mL wine (~1.0 std)</option>
+            <option value="wine_150ml|150|13.5">150mL wine (~1.6 std)</option>
+            <option value="spirit_30ml|30|40">30mL spirits (~1.0 std)</option>
+            <option value="premix_375ml|375|5">375mL premix (~1.5 std)</option>
+          </select>
+          <button onclick="recordDrink()">Record Drink</button>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button onclick="recordConcern()">Record Concern</button>
+        <button class="btn-refusal" onclick="recordRefusal()">Record Refusal</button>
+        <button onclick="loadSession()">Refresh</button>
+      </div>
+
+      <div class="disclaimer">
+        Risk indicator only. This is not a BAC estimate or automatic service decision.
+        Final assessment remains with RSA-trained staff.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Same-origin when served by the FastAPI app (works on Azure and locally).
+// Only falls back to localhost:8000 if this file is opened directly from disk.
+// Azure / served by FastAPI -> same origin. Old local setup (static server on :8080,
+// API on :8000) or a file opened from disk -> talk to port 8000 directly.
+const API_BASE = window.location.protocol === "file:" ? "http://localhost:8000"
+  : (window.location.port === "8080" ? "http://" + window.location.hostname + ":8000" : "");
+// Real staff_id from venue_staff (staff_login = 'staff01')
+const STAFF_ID = "647aff54-702d-414d-82c8-513c17a4c3f9";
+
+function currentVenue() {
+  return document.getElementById("venueSelect").value;
+}
+
+function extractToken(raw) {
+  raw = raw.trim();
+  const parts = raw.split("/");
+  return parts[parts.length - 1];
+}
+
+function maskSessionId(id) {
+  return "SL-****" + id.slice(-4).toUpperCase();
+}
+
+function setStatus(msg, isError) {
+  const el = document.getElementById("status");
+  el.textContent = msg;
+  el.style.color = isError ? "#ff6b6b" : "#9aa0ab";
+}
+
+function authHeaders(token, extra = {}) {
+  return { "Authorization": `Bearer ${token}`, ...extra };
+}
+
+async function loadSession(keepStatus) {
+  const raw = document.getElementById("tokenInput").value;
+  if (!raw) { setStatus("Enter a token or scanned URL first.", true); return; }
+  const token = extractToken(raw);
+  if (!keepStatus) setStatus("Loading...");
+
+  try {
+    const riskResp = await fetch(`${API_BASE}/sessions/risk`, {
+      headers: authHeaders(token),
+    });
+    if (!riskResp.ok) {
+      const err = await riskResp.json().catch(() => ({}));
+      setStatus("Error: " + (err.detail?.error || riskResp.status), true);
+      document.getElementById("sessionCard").style.display = "none";
+      return;
+    }
+    const risk = await riskResp.json();
+    renderRisk(risk, token);
+    if (!keepStatus) setStatus("Loaded.");
+  } catch (e) {
+    setStatus("Could not reach API.", true);
+  }
+}
+
+function renderRisk(risk, token) {
+  document.getElementById("sessionCard").style.display = "block";
+  document.getElementById("sessionIdLabel").textContent =
+    "Anonymous Session: " + maskSessionId(risk.session_id);
+
+  const badge = document.getElementById("riskBadge");
+  badge.textContent = risk.risk_level;
+  badge.className = "risk-badge risk-" + risk.risk_level.replace(" ", "-");
+
+  document.getElementById("scoreValue").textContent = "Score: " + risk.risk_score;
+  document.getElementById("drinks3h").textContent = risk.standard_drinks_3h;
+  document.getElementById("venues").textContent = risk.unique_venues_visited;
+
+  const refusalEl = document.getElementById("refusalFlag");
+  refusalEl.textContent = risk.previous_refusal ? "YES" : "NO";
+  refusalEl.className = risk.previous_refusal ? "flag-yes" : "flag-no";
+
+  // Make a previous refusal impossible to miss for the next bar
+  document.getElementById("refusalBanner").style.display = risk.previous_refusal ? "block" : "none";
+  document.getElementById("mainCard").classList.toggle("refused", !!risk.previous_refusal);
+
+  const concernEl = document.getElementById("concernFlag");
+  concernEl.textContent = risk.staff_concern ? "YES" : "NO";
+  concernEl.className = risk.staff_concern ? "flag-yes" : "flag-no";
+
+  const factorsList = document.getElementById("factorsList");
+  factorsList.innerHTML = risk.factors
+    .map(f => `<div class="${f.points > 0 ? 'factor-pos' : 'factor-zero'}">
+      ${f.points >= 0 ? '+' : ''}${f.points} ${f.label}</div>`)
+    .join("");
+
+  document.getElementById("tokenInput").dataset.token = token;
+}
+
+// One helper for every POST: shows the real server error instead of failing silently.
+async function postEvent(path, body, okMessage) {
+  const token = document.getElementById("tokenInput").dataset.token;
+  if (!token) { setStatus("Load a session first.", true); return; }
+  try {
+    const resp = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: authHeaders(token, { "Content-Type": "application/json" }),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      let detail = "";
+      try { detail = JSON.stringify((await resp.json()).detail ?? ""); } catch (_) {}
+      setStatus(`Failed (${resp.status}) at ${currentVenue()}: ${detail}`, true);
+      return;
+    }
+    setStatus(`${okMessage} at ${currentVenue()}.`);
+    await loadSession(true);
+  } catch (e) {
+    setStatus("Could not reach API.", true);
+  }
+}
+
+function recordDrink() {
+  const [drink_type, volume_ml, abv] = document.getElementById("drinkSelect").value.split("|");
+  return postEvent("/sessions/drinks",
+    { venue_id: currentVenue(), drink_type, volume_ml: parseFloat(volume_ml), abv: parseFloat(abv) },
+    "Drink recorded");
+}
+
+function recordConcern() {
+  return postEvent("/sessions/concerns",
+    { venue_id: currentVenue(), staff_id: STAFF_ID, note: "" }, "Concern recorded");
+}
+
+function recordRefusal() {
+  return postEvent("/sessions/refusals",
+    { venue_id: currentVenue(), staff_id: STAFF_ID, note: "" }, "Refusal recorded");
+}
+
+// Remember which bar this device (the Pi) is at, so scanning a patron QR
+// (which reloads this page) never resets it back to VEN-001.
+(function restoreVenue() {
+  const sel = document.getElementById("venueSelect");
+  try {
+    const saved = localStorage.getItem("soberlink_dashboard_venue");
+    if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved;
+  } catch (_) {}
+  sel.addEventListener("change", () => {
+    try { localStorage.setItem("soberlink_dashboard_venue", sel.value); } catch (_) {}
+    setStatus("This device is now set to " + sel.value + ".");
+  });
+})();
+
+(function autoLoadFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  if (token) {
+    document.getElementById("tokenInput").value = token;
+    loadSession();
+  }
+})();
+</script>
+</body>
+</html>
