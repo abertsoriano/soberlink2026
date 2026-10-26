@@ -123,8 +123,11 @@ function currentVenue() {
   return document.getElementById("venueSelect").value;
 }
 
+// Accepts a bare token or a scanned URL (…#token=…, …?token=…, or …/token).
 function extractToken(raw) {
   raw = raw.trim();
+  const match = raw.match(/[?#&]token=([^&#]+)/);
+  if (match) return decodeURIComponent(match[1]);
   const parts = raw.split("/");
   return parts[parts.length - 1];
 }
@@ -205,6 +208,11 @@ function renderRisk(risk, token) {
 async function postEvent(path, body, okMessage) {
   const token = document.getElementById("tokenInput").dataset.token;
   if (!token) { setStatus("Load a session first.", true); return; }
+  // The box may now hold a different patron than the card on screen.
+  if (extractToken(document.getElementById("tokenInput").value) !== token) {
+    setStatus("Token changed. Press Load / Scan before recording.", true);
+    return;
+  }
   try {
     const resp = await fetch(`${API_BASE}${path}`, {
       method: "POST",
@@ -255,13 +263,20 @@ function recordRefusal() {
   });
 })();
 
+// The token arrives in the #fragment (patron QR and Pi kiosk). ?token= is still
+// accepted for QR codes rendered before that change.
 (function autoLoadFromURL() {
-  const params = new URLSearchParams(window.location.search);
-  const token = params.get("token");
-  if (token) {
-    document.getElementById("tokenInput").value = token;
-    loadSession();
+  function loadFromURL() {
+    const token = new URLSearchParams(window.location.hash.slice(1)).get("token")
+      || new URLSearchParams(window.location.search).get("token");
+    if (token) {
+      document.getElementById("tokenInput").value = token;
+      loadSession();
+    }
   }
+  // A new #token= on an already-open dashboard doesn't reload the page.
+  window.addEventListener("hashchange", loadFromURL);
+  loadFromURL();
 })();
 </script>
 </body>

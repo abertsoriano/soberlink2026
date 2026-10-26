@@ -127,7 +127,9 @@ async function checkinFlow() {
 function render(risk, token) {
   const content = document.getElementById("content");
   // Same origin as this page (no hard-coded port), so it works on Azure.
-  const sessionUrl = `${window.location.origin}/dashboard.html?token=${token}`;
+  // Token goes in the #fragment, which browsers never send to the server,
+  // so it stays out of the Azure request logs (same as the Pi kiosk does).
+  const sessionUrl = `${window.location.origin}/dashboard.html#token=${token}`;
 
   if (risk.risk_level === "LOW") {
     content.innerHTML = `

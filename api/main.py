@@ -1,7 +1,8 @@
 import os
 from datetime import datetime, timedelta, timezone
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -57,15 +58,25 @@ class RefusalRequest(BaseModel):
 
 # ---------- auth (token now comes from a header, not the URL) ----------
 
-def get_token(authorization: str = Header(...)) -> str:
+# Declared as a security scheme, not a plain Header() parameter: OpenAPI ignores
+# header parameters named "Authorization", so /docs never sent the token and every
+# call failed with 422. This also gives /docs an "Authorize" button.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description="Paste the raw_token from POST /sessions (without the word Bearer).",
+)
+
+def get_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)) -> str:
     """Expects: Authorization: Bearer <raw_token>
     Keeping the token in a header (instead of the URL) means it never shows up
     in Azure's request logs, unlike query params or path segments."""
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail={"error": "invalid_authorization_header"})
-    token = authorization.removeprefix("Bearer ").strip()
+    token = credentials.credentials.strip() if credentials else ""
     if not token:
-        raise HTTPException(status_code=401, detail={"error": "missing_token"})
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "invalid_authorization_header"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return token
 
 # ---------- helpers ----------
